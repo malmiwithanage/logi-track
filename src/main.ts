@@ -11,6 +11,7 @@ async function bootstrap() {
     .setTitle('Logi Track API')
     .setDescription('API documentation for Logi Track')
     .setVersion('1.0')
+    .addBearerAuth()
     .build();
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('docs', app, swaggerDocument);

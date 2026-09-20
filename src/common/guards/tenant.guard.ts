@@ -13,12 +13,12 @@ export class TenantGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    const tenantId = request.user?.tenantId ?? request.headers['x-tenant-id'];
-    const branchId = request.user?.branchId ?? request.headers['x-branch-id'];
-    const userId = request.user?.id ?? request.headers['x-user-id'];
+    const tenantId = request.user?.tenantId;
+    const branchId = request.user?.branchId;
+    const userId = request.user?.id;
 
     if (typeof tenantId !== 'string' || tenantId.length === 0) {
-      throw new UnauthorizedException('Tenant context is required');
+      throw new UnauthorizedException('Authenticated tenant context is required');
     }
 
     if (branchId !== undefined && typeof branchId !== 'string') {
