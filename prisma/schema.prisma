@@ -7,7 +7,9 @@ datasource db {
 }
 
 enum UserRole {
+  ADMIN
   MANAGER
+  VIEWER
 }
 
 enum ShipmentStatus {
@@ -21,6 +23,7 @@ model Tenant {
   branches      Branch[]
   users         User[]
   shipmentTrips ShipmentTrip[]
+  exportJobs     ExportJob[]
 }
 
 model Branch {
@@ -31,6 +34,7 @@ model Branch {
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   users         User[]
   shipmentTrips ShipmentTrip[]
+  exportJobs     ExportJob[]
 
   @@index([tenantId])
 }
@@ -45,9 +49,37 @@ model User {
   createdAt DateTime @default(now())
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  exportJobs ExportJob[]
 
   @@index([tenantId])
   @@index([branchId])
+}
+
+enum ExportJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model ExportJob {
+  id            String         @id @default(uuid())
+  status        ExportJobStatus @default(PENDING)
+  tenantId      String
+  branchId      String
+  requestedById String
+  fileUrl       String?
+  rowCount      Int?
+  error         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  completedAt   DateTime?
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch        Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  requestedBy   User           @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, branchId, createdAt])
+  @@index([requestedById])
 }
 
 model ShipmentTrip {
