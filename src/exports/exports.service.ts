@@ -2,6 +2,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ExportJobStatus } from '@prisma/client';
 import { Queue } from 'bullmq';
+import { createTenantPrismaClient } from '../prisma/prisma-tenant.extension';
 import { PrismaService } from '../prisma/prisma.service';
 import type { TenantContext } from '../common/decorators/tenant.decorator';
 
@@ -17,7 +18,12 @@ export class ExportsService {
       throw new UnauthorizedException('Branch and user context are required');
     }
 
-    const dbJob = await this.prisma.exportJob.create({
+    const prisma = createTenantPrismaClient(
+      this.prisma,
+      tenantContext.tenantId,
+    );
+
+    const dbJob = await prisma.exportJob.create({
       data: {
         status: ExportJobStatus.PENDING,
         tenantId: tenantContext.tenantId,
@@ -37,7 +43,7 @@ export class ExportsService {
         { attempts: 3, backoff: { type: 'exponential', delay: 1000 } },
       );
     } catch (error) {
-      await this.prisma.exportJob.update({
+      await prisma.exportJob.update({
         where: { id: dbJob.id },
         data: {
           status: ExportJobStatus.FAILED,
@@ -55,10 +61,14 @@ export class ExportsService {
   }
 
   async getJobStatus(jobId: string, tenantContext: TenantContext) {
-    const job = await this.prisma.exportJob.findFirst({
+    const prisma = createTenantPrismaClient(
+      this.prisma,
+      tenantContext.tenantId,
+    );
+
+    const job = await prisma.exportJob.findFirst({
       where: {
         id: jobId,
-        tenantId: tenantContext.tenantId,
         ...(tenantContext.branchId ? { branchId: tenantContext.branchId } : {}),
       },
     });

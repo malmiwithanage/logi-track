@@ -13,7 +13,7 @@ interface ShipmentExportJob {
 }
 
 @Injectable()
-@Processor('export-queue')
+@Processor('export-queue', { concurrency: 2 })
 export class ExportProcessor extends WorkerHost {
   private readonly logger = new Logger(ExportProcessor.name);
   private readonly supabase: SupabaseClient;
