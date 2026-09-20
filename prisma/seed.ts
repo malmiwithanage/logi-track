@@ -1,7 +1,11 @@
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, ShipmentStatus, UserRole } from '@prisma/client';
+import {
+  PrismaClient,
+  ShipmentStatus,
+  UserRole,
+} from '@prisma/client';
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -13,169 +17,154 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString }),
 });
 
+const totalRecords = 100_000;
+const batchSize = 10_000;
+const shipmentStatuses: ShipmentStatus[] = [
+  ShipmentStatus.DELIVERED,
+  ShipmentStatus.IN_TRANSIT,
+  ShipmentStatus.PENDING,
+  ShipmentStatus.CANCELLED,
+];
+
 async function main() {
-  console.log('Seeding initial database records...');
-  const demoPasswordHash = await bcrypt.hash('manager-password', 10);
+  console.log('Clearing existing local data...');
+  await prisma.shipmentTrip.deleteMany();
+  await prisma.exportJob.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.branch.deleteMany();
+  await prisma.tenant.deleteMany();
 
-  const tenant = await prisma.tenant.upsert({
-    where: { id: 'tenant-acme-logistics' },
-    update: { name: 'Acme Logistics Global' },
-    create: {
+  console.log('Creating tenants and branches...');
+  const acmeTenant = await prisma.tenant.create({
+    data: {
       id: 'tenant-acme-logistics',
-      name: 'Acme Logistics Global',
+      name: 'Acme Logistics',
+      slug: 'acme-logistics',
     },
   });
 
-  const branch = await prisma.branch.upsert({
-    where: { id: 'b1c83d5a-fa64-4b53-bb74-06c827011d61' },
-    update: {
-      name: 'Colombo Central Hub',
-      tenantId: tenant.id,
-    },
-    create: {
-      id: 'b1c83d5a-fa64-4b53-bb74-06c827011d61',
-      name: 'Colombo Central Hub',
-      tenantId: tenant.id,
+  const branchNorth = await prisma.branch.create({
+    data: {
+      id: 'branch-acme-north',
+      name: 'Acme North Branch',
+      tenantId: acmeTenant.id,
     },
   });
 
-  const branchTwo = await prisma.branch.upsert({
-    where: { id: 'f2d54d8e-6f8c-4df8-8b5b-47ef7f4f6f0d' },
-    update: {
-      name: 'Kandy Regional Hub',
-      tenantId: tenant.id,
-    },
-    create: {
-      id: 'f2d54d8e-6f8c-4df8-8b5b-47ef7f4f6f0d',
-      name: 'Kandy Regional Hub',
-      tenantId: tenant.id,
+  const branchSouth = await prisma.branch.create({
+    data: {
+      id: 'branch-acme-south',
+      name: 'Acme South Branch',
+      tenantId: acmeTenant.id,
     },
   });
 
-  const secondTenant = await prisma.tenant.upsert({
-    where: { id: 'tenant-global-freight' },
-    update: { name: 'Global Freight Partners' },
-    create: {
+  const globalTenant = await prisma.tenant.create({
+    data: {
       id: 'tenant-global-freight',
       name: 'Global Freight Partners',
+      slug: 'global-freight',
     },
   });
 
-  const secondTenantBranch = await prisma.branch.upsert({
-    where: { id: '8e4d6f21-90b4-4d3c-a2f6-1e7f8c9b0a12' },
-    update: {
-      name: 'Galle Port Hub',
-      tenantId: secondTenant.id,
-    },
-    create: {
-      id: '8e4d6f21-90b4-4d3c-a2f6-1e7f8c9b0a12',
-      name: 'Galle Port Hub',
-      tenantId: secondTenant.id,
+  const globalBranch = await prisma.branch.create({
+    data: {
+      id: 'branch-global-galle',
+      name: 'Global Freight Galle Branch',
+      tenantId: globalTenant.id,
     },
   });
 
-  const user = await prisma.user.upsert({
-    where: { id: 'user-manager-01' },
-    update: {
-      email: 'manager@acmelogistics.com',
-      password: demoPasswordHash,
-      role: UserRole.MANAGER,
-      tenantId: tenant.id,
-      branchId: branch.id,
-    },
-    create: {
-      id: 'user-manager-01',
-      email: 'manager@acmelogistics.com',
-      password: demoPasswordHash,
-      role: UserRole.MANAGER,
-      tenantId: tenant.id,
-      branchId: branch.id,
-    },
+  const passwordHash = await bcrypt.hash('password123', 10);
+  await prisma.user.createMany({
+    data: [
+      {
+        id: 'user-admin-acme',
+        email: 'admin@acmelogistics.com',
+        password: passwordHash,
+        role: UserRole.ADMIN,
+        tenantId: acmeTenant.id,
+        branchId: branchNorth.id,
+      },
+      {
+        id: 'user-manager-north',
+        email: 'manager.north@acmelogistics.com',
+        password: passwordHash,
+        role: UserRole.MANAGER,
+        tenantId: acmeTenant.id,
+        branchId: branchNorth.id,
+      },
+      {
+        id: 'user-manager-south',
+        email: 'manager.south@acmelogistics.com',
+        password: passwordHash,
+        role: UserRole.MANAGER,
+        tenantId: acmeTenant.id,
+        branchId: branchSouth.id,
+      },
+      {
+        id: 'user-manager-global',
+        email: 'manager@globalfreight.com',
+        password: passwordHash,
+        role: UserRole.MANAGER,
+        tenantId: globalTenant.id,
+        branchId: globalBranch.id,
+      },
+    ],
   });
 
-  const branchTwoUser = await prisma.user.upsert({
-    where: { id: 'user-manager-02' },
-    update: {
-      email: 'kandy.manager@acmelogistics.com',
-      password: demoPasswordHash,
-      role: UserRole.MANAGER,
-      tenantId: tenant.id,
-      branchId: branchTwo.id,
-    },
-    create: {
-      id: 'user-manager-02',
-      email: 'kandy.manager@acmelogistics.com',
-      password: demoPasswordHash,
-      role: UserRole.MANAGER,
-      tenantId: tenant.id,
-      branchId: branchTwo.id,
-    },
-  });
+  console.log(`Generating ${totalRecords.toLocaleString()} Acme shipment records...`);
+  const branches = [branchNorth.id, branchSouth.id];
 
-  const secondTenantUser = await prisma.user.upsert({
-    where: { id: 'user-manager-03' },
-    update: {
-      email: 'manager@globalfreight.com',
-      password: demoPasswordHash,
-      role: UserRole.MANAGER,
-      tenantId: secondTenant.id,
-      branchId: secondTenantBranch.id,
-    },
-    create: {
-      id: 'user-manager-03',
-      email: 'manager@globalfreight.com',
-      password: demoPasswordHash,
-      role: UserRole.MANAGER,
-      tenantId: secondTenant.id,
-      branchId: secondTenantBranch.id,
-    },
-  });
+  for (let offset = 0; offset < totalRecords; offset += batchSize) {
+    const currentBatchSize = Math.min(batchSize, totalRecords - offset);
+    const shipmentsBatch = Array.from(
+      { length: currentBatchSize },
+      (_, batchIndex) => {
+        const recordNumber = offset + batchIndex + 1;
+        const branchId = branches[(recordNumber - 1) % branches.length];
+        const status = shipmentStatuses[(recordNumber - 1) % shipmentStatuses.length];
+        const distanceKm = 20 + ((recordNumber * 37) % 481);
 
-  const tripsData = Array.from({ length: 50 }, (_, index) => ({
-    trackingNumber: `TRK-2026-${1000 + index}`,
-    distanceKm: Number((20 + ((index * 37) % 481) + index / 100).toFixed(2)),
-    fuelConsumedL: Number((10 + ((index * 17) % 71) + index / 100).toFixed(2)),
-    status: ShipmentStatus.DELIVERED,
-    tenantId: tenant.id,
-    branchId: branch.id,
-    createdAt: new Date(`2026-08-${String((index % 28) + 1).padStart(2, '0')}T10:00:00.000Z`),
-  }));
+        return {
+          tenantId: acmeTenant.id,
+          branchId,
+          trackingNumber: `TRK-ACME-${recordNumber.toString().padStart(6, '0')}`,
+          origin: `Warehouse-${(recordNumber % 10) + 1}`,
+          destination: `Hub-${(recordNumber % 20) + 1}`,
+          status,
+          distanceKm,
+          fuelConsumedL: Number((10 + ((recordNumber * 17) % 71)).toFixed(2)),
+          weightKg: Number((10 + ((recordNumber * 29) % 491)).toFixed(2)),
+          createdAt: new Date(Date.now() - recordNumber * 60_000),
+        };
+      },
+    );
 
-  const branchTwoTripsData = Array.from({ length: 10 }, (_, index) => ({
-    trackingNumber: `TRK-2026-KANDY-${1000 + index}`,
-    distanceKm: Number((35 + ((index * 29) % 220) + index / 100).toFixed(2)),
-    fuelConsumedL: Number((12 + ((index * 11) % 42) + index / 100).toFixed(2)),
-    status: ShipmentStatus.DELIVERED,
-    tenantId: tenant.id,
-    branchId: branchTwo.id,
-    createdAt: new Date(`2026-08-${String((index % 10) + 1).padStart(2, '0')}T11:00:00.000Z`),
-  }));
-
-  const secondTenantTripsData = Array.from({ length: 15 }, (_, index) => ({
-    trackingNumber: `TRK-2026-GALLE-${1000 + index}`,
-    distanceKm: Number((45 + ((index * 23) % 300) + index / 100).toFixed(2)),
-    fuelConsumedL: Number((15 + ((index * 13) % 55) + index / 100).toFixed(2)),
-    status: ShipmentStatus.DELIVERED,
-    tenantId: secondTenant.id,
-    branchId: secondTenantBranch.id,
-    createdAt: new Date(`2026-08-${String((index % 15) + 1).padStart(2, '0')}T12:00:00.000Z`),
-  }));
+    await prisma.shipmentTrip.createMany({ data: shipmentsBatch });
+    console.log(`Seeded ${offset + currentBatchSize} / ${totalRecords} shipments`);
+  }
 
   await prisma.shipmentTrip.createMany({
-    data: [...tripsData, ...branchTwoTripsData, ...secondTenantTripsData],
-    skipDuplicates: true,
+    data: Array.from({ length: 15 }, (_, index) => ({
+      tenantId: globalTenant.id,
+      branchId: globalBranch.id,
+      trackingNumber: `TRK-GLOBAL-${(index + 1).toString().padStart(4, '0')}`,
+      origin: `Global Warehouse-${(index % 5) + 1}`,
+      destination: `Global Hub-${(index % 8) + 1}`,
+      status: ShipmentStatus.DELIVERED,
+      distanceKm: 50 + index * 10,
+      fuelConsumedL: 15 + index,
+      weightKg: 100 + index * 5,
+      createdAt: new Date(Date.now() - index * 60_000),
+    })),
   });
 
-  console.log('Seeding completed successfully!');
-  console.log(`Tenant ID: ${tenant.id}`);
-  console.log(`Branch ID: ${branch.id}`);
-  console.log(`Second branch ID: ${branchTwo.id}`);
-  console.log(`Second tenant ID: ${secondTenant.id}`);
-  console.log(`Second tenant branch ID: ${secondTenantBranch.id}`);
-  console.log(`User ID: ${user.id}`);
-  console.log(`Second branch user ID: ${branchTwoUser.id}`);
-  console.log(`Second tenant user ID: ${secondTenantUser.id}`);
-  console.log(`Shipment trips processed: ${tripsData.length + branchTwoTripsData.length + secondTenantTripsData.length}`);
+  console.log('Seeding completed successfully.');
+  console.log(`Acme tenant: ${acmeTenant.id}`);
+  console.log(`North manager: manager.north@acmelogistics.com / password123`);
+  console.log(`South manager: manager.south@acmelogistics.com / password123`);
+  console.log(`Global tenant: ${globalTenant.id}`);
 }
 
 main()

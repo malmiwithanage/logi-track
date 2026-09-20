@@ -13,12 +13,16 @@ enum UserRole {
 }
 
 enum ShipmentStatus {
+  PENDING
+  IN_TRANSIT
   DELIVERED
+  CANCELLED
 }
 
 model Tenant {
   id            String         @id
   name          String
+  slug          String         @unique
   createdAt     DateTime       @default(now())
   branches      Branch[]
   users         User[]
@@ -87,6 +91,9 @@ model ShipmentTrip {
   trackingNumber String         @unique
   distanceKm     Float
   fuelConsumedL  Float
+  origin         String
+  destination    String
+  weightKg       Float
   status         ShipmentStatus
   tenantId       String
   branchId       String

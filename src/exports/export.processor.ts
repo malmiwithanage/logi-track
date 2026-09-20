@@ -49,8 +49,11 @@ export class ExportProcessor extends WorkerHost {
         orderBy: { createdAt: 'asc' },
         select: {
           trackingNumber: true,
+          origin: true,
+          destination: true,
           distanceKm: true,
           fuelConsumedL: true,
+          weightKg: true,
           status: true,
           createdAt: true,
         },
@@ -59,8 +62,11 @@ export class ExportProcessor extends WorkerHost {
       const parser = new Parser({
         fields: [
           'trackingNumber',
+          'origin',
+          'destination',
           'distanceKm',
           'fuelConsumedL',
+          'weightKg',
           'status',
           'createdAt',
         ],
