@@ -21,6 +21,10 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       connection: {
         host: process.env.REDIS_HOST || 'localhost',
         port: Number(process.env.REDIS_PORT) || 6379,
+        username: 'default',
+        password: process.env.REDIS_PASSWORD,
+        tls: process.env.REDIS_TLS === 'true' ? {} : undefined,
+        maxRetriesPerRequest: null,
       },
     }),
     // Distributed tracing, auto-correlated logs, request/job metrics, error
