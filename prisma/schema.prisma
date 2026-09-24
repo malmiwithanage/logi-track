@@ -72,7 +72,7 @@ model ExportJob {
   tenantId      String
   branchId      String
   requestedById String
-  fileUrl       String?
+  filePath      String?
   rowCount      Int?
   error         String?
   createdAt     DateTime       @default(now())
@@ -104,4 +104,13 @@ model ShipmentTrip {
   @@index([tenantId, createdAt])
   @@index([branchId, createdAt])
   @@index([status])
+}
+
+model RevokedToken {
+  id        String   @id @default(uuid())
+  jti       String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
 }

@@ -1,4 +1,5 @@
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'node:crypto';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -26,6 +27,7 @@ export class AuthService {
       tenantId: user.tenantId,
       branchId: user.branchId,
       role: user.role,
+      jti: randomUUID(),
     };
 
     return {
@@ -38,5 +40,18 @@ export class AuthService {
         branchId: user.branchId,
       },
     };
+  }
+
+  async logout(user: { jti: string; exp: number }) {
+    await this.prisma.revokedToken.upsert({
+      where: { jti: user.jti },
+      create: {
+        jti: user.jti,
+        expiresAt: new Date(user.exp * 1000),
+      },
+      update: {},
+    });
+
+    return { message: 'Logged out successfully' };
   }
 }

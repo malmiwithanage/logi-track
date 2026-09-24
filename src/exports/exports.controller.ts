@@ -31,4 +31,14 @@ export class ExportsController {
   ) {
     return this.exportsService.getJobStatus(id, tenantContext);
   }
+
+  @Get(':id/download')
+  @Roles(Role.ADMIN, Role.MANAGER, Role.VIEWER)
+  @ApiOperation({ summary: 'Get a short-lived tenant and branch-scoped download URL' })
+  getDownloadUrl(
+    @Param('id') id: string,
+    @GetTenant() tenantContext: TenantContext,
+  ) {
+    return this.exportsService.getDownloadUrl(id, tenantContext);
+  }
 }

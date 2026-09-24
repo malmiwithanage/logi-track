@@ -84,29 +84,20 @@ export class ExportProcessor extends WorkerHost {
         throw uploadError;
       }
 
-      const { data: signedUrlData, error: signedUrlError } =
-        await this.supabase.storage
-          .from(this.bucket)
-          .createSignedUrl(filePath, 60 * 60);
-
-      if (signedUrlError) {
-        throw signedUrlError;
-      }
-
       await this.prisma.exportJob.update({
         where: { id: exportJobId, tenantId, branchId },
         data: {
           status: ExportJobStatus.COMPLETED,
           rowCount: shipments.length,
           completedAt: new Date(),
-          fileUrl: signedUrlData.signedUrl,
+          filePath,
         },
       });
 
       this.logger.log(
         `Export ${exportJobId} uploaded to Supabase with ${shipments.length} rows`,
       );
-      return { rowCount: shipments.length, fileUrl: signedUrlData.signedUrl };
+      return { rowCount: shipments.length };
     } catch (error) {
       await this.prisma.exportJob.update({
         where: { id: exportJobId, tenantId, branchId },
