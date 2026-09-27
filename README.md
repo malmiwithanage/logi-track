@@ -16,7 +16,7 @@ It demonstrates a modular backend architecture for organizations that need to ma
 - Swagger/OpenAPI documentation
 - TypeScript, strict compilation, and automated linting
 
-## Architecture
+## System Architecture
 
 The following diagram illustrates the secure, multi-tenant request pipeline for Logi Track—demonstrating synchronous tenant-scoped reading alongside asynchronous, event-driven worker delegation (`BullMQ` + `Redis`).
 
@@ -123,7 +123,9 @@ flowchart TD
     JobLookup -->|"Return job status"| Client
 ```
 
-The project is a modular monolith. Authentication, shipments, exports, and database access have separate module boundaries, while the application remains straightforward to deploy and operate. This is appropriate for the current domain and leaves room to extract independently scaling services later.
+### Key Architectural Safeguards Implemented:
+* **Contextual Isolation:** Tenant/Branch contexts are derived exclusively from cryptographically signed JWT payloads, preventing Parameter Tampering and Broken Object Level Authorization (BOLA / IDOR).
+* **Resource Preservation:** Long-running operations (like heavy CSV compilation and remote object streaming to `Supabase Storage`) are offloaded to background threads via an event queue, maintaining a fast API response cycle.
 
 ## Modules
 
