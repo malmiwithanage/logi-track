@@ -18,24 +18,109 @@ It demonstrates a modular backend architecture for organizations that need to ma
 
 ## Architecture
 
-```text
-Client
-	|
-	v
-NestJS HTTP API
-	|
-	+-- JWT authentication
-	+-- Tenant and branch validation
-	+-- Role authorization
-	|
-	v
-Application services
-	|
-	+-- Prisma -> PostgreSQL
-	+-- BullMQ -> Redis -> Export worker
-	|
-	+-- Supabase Storage
-	+-- 10-minute signed download URL
+The following diagram illustrates the secure, multi-tenant request pipeline for Logi Track—demonstrating synchronous tenant-scoped reading alongside asynchronous, event-driven worker delegation (`BullMQ` + `Redis`).
+
+```mermaid
+flowchart TD
+    Client[Client]
+
+    subgraph Login["Login"]
+        LoginAPI["POST /auth/login"]
+        AuthService["Auth service"]
+        UserDB[(PostgreSQL: users)]
+        Token["JWT access token"]
+    end
+
+    subgraph ShipmentFlow["Read shipments"]
+        ShipmentRequest["GET /shipments"]
+        ShipmentJWT["JWT guard"]
+        RevokedTokens[(PostgreSQL: revoked tokens)]
+        ShipmentTenant["Tenant guard"]
+        BranchDB[(PostgreSQL: branches)]
+        ShipmentEndpoint["Shipments endpoint"]
+        ShipmentService["Shipments service"]
+        ScopedPrisma["Tenant-scoped Prisma client"]
+        ShipmentDB[(PostgreSQL: shipment trips)]
+    end
+
+    subgraph ExportFlow["Create export"]
+        ExportRequest["POST /exports/shipments"]
+        ExportJWT["JWT guard"]
+        ExportTenant["Tenant guard"]
+        CreateRoles["Roles guard<br/>ADMIN or MANAGER"]
+        CreateEndpoint["Exports endpoint"]
+        ExportService["Exports service"]
+        ExportJobDB[(PostgreSQL: export jobs)]
+        Redis[(Redis / BullMQ)]
+        Worker["Export processor"]
+        CSV["Generate CSV"]
+        Storage[(Supabase Storage)]
+    end
+
+    subgraph StatusFlow["Check status or download"]
+        StatusRequest["GET /exports/:id/status<br/>or GET /exports/:id/download"]
+        StatusJWT["JWT guard"]
+        StatusTenant["Tenant guard"]
+        StatusRoles["Roles guard<br/>ADMIN, MANAGER, or VIEWER"]
+        StatusEndpoint["Status or download endpoint"]
+        StatusService["Exports service"]
+        JobLookup["Find job for tenant and branch"]
+        SignedURL["Create short-lived signed URL"]
+    end
+
+    Client -->|"1. Submit credentials"| LoginAPI
+    LoginAPI --> AuthService
+    AuthService -->|"2. Find user and verify password"| UserDB
+    AuthService -->|"3. Sign token"| Token
+    Token -->|"4. Return access token"| Client
+
+    Client -->|"5. Request shipments with Bearer token"| ShipmentRequest
+    ShipmentRequest --> ShipmentJWT
+    ShipmentJWT -->|"6. Check token and revocation"| RevokedTokens
+    RevokedTokens -->|"7. Token is not revoked"| ShipmentJWT
+    ShipmentJWT -->|"8. Pass authenticated claims"| ShipmentTenant
+    ShipmentTenant -->|"9. Verify branch belongs to tenant"| BranchDB
+    BranchDB -->|"10. Branch is valid"| ShipmentTenant
+    ShipmentTenant -->|"11. Pass tenant and branch context"| ShipmentEndpoint
+    ShipmentEndpoint --> ShipmentService
+    ShipmentService --> ScopedPrisma
+    ScopedPrisma -->|"12. Query tenant- and branch-scoped records"| ShipmentDB
+    ShipmentDB -->|"13. Return shipment data"| Client
+
+    Client -->|"14. Request export with Bearer token"| ExportRequest
+    ExportRequest --> ExportJWT
+    ExportJWT -->|"15. Validate token and check revocation"| RevokedTokens
+    RevokedTokens --> ExportJWT
+    ExportJWT --> ExportTenant
+    ExportTenant -->|"16. Verify branch and build tenant context"| BranchDB
+    BranchDB --> ExportTenant
+    ExportTenant --> CreateRoles
+    CreateRoles -->|"17. Authorize export role"| CreateEndpoint
+    CreateEndpoint --> ExportService
+    ExportService -->|"18. Create PENDING export job"| ExportJobDB
+    ExportService -->|"19. Enqueue job with tenant and branch IDs"| Redis
+    Redis -->|"20. Deliver job"| Worker
+    Worker -->|"21. Read scoped shipment records"| ShipmentDB
+    Worker --> CSV
+    CSV -->|"22. Upload CSV"| Storage
+    Worker -->|"23. Save file path and update job status"| ExportJobDB
+
+    Client -->|"24. Request status or download with Bearer token"| StatusRequest
+    StatusRequest --> StatusJWT
+    StatusJWT -->|"25. Validate token and check revocation"| RevokedTokens
+    RevokedTokens --> StatusJWT
+    StatusJWT --> StatusTenant
+    StatusTenant -->|"26. Verify branch and build tenant context"| BranchDB
+    BranchDB --> StatusTenant
+    StatusTenant --> StatusRoles
+    StatusRoles -->|"27. Authorize status or download role"| StatusEndpoint
+    StatusEndpoint --> StatusService
+    StatusService --> JobLookup
+    JobLookup -->|"28. Find tenant- and branch-scoped job"| ExportJobDB
+    JobLookup -->|"If completed and downloading"| SignedURL
+    SignedURL -->|"29. Create URL for CSV"| Storage
+    SignedURL -->|"30. Return signed URL"| Client
+    JobLookup -->|"Return job status"| Client
 ```
 
 The project is a modular monolith. Authentication, shipments, exports, and database access have separate module boundaries, while the application remains straightforward to deploy and operate. This is appropriate for the current domain and leaves room to extract independently scaling services later.
